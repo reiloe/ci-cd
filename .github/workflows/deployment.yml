@@ -43,7 +43,7 @@ jobs:
       - name: Verify GHCR Login
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker info | grep -A 20 "Registry"
+          docker info
       - name: Set image tag
         id: vars
         run: |
