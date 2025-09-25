@@ -94,15 +94,15 @@ jobs:
             chmod 600 ~/.ssh/deployment_key
       - name: Ensure server is in known_hosts
         run: |
-            if ! ssh-keygen -F "${{ secrets.SERVERIP }}" > /dev/null; then
-                echo "Adding server fingerprint for ${{ secrets.SERVERIP }}"
-                ssh-keyscan -H "${{ secrets.SERVERIP }}" >> ~/.ssh/known_hosts
+            if ! ssh-keygen -F "${{ secrets.DEPLOYMENT_HOST }}" > /dev/null; then
+                echo "Adding server fingerprint for ${{ secrets.DEPLOYMENT_HOST }}"
+                ssh-keyscan -H "${{ secrets.DEPLOYMENT_HOST }}" >> ~/.ssh/known_hosts
             else
                 echo "Server already in known_hosts"
             fi
       - name: Deploy to server via SSH
         run: |
-          ssh -i ~/.ssh/deployment_key ${{ secrets.DEPLOYMENT_USER }}@${{ secrets.SERVERIP }} << 'EOF'
+          ssh -i ~/.ssh/deployment_key ${{ secrets.DEPLOYMENT_USER }}@${{ secrets.DEPLOYMENT_HOST }} << 'EOF'
           set -e
 
           PROJECT_DIR=~/deployments/${{ github.event.repository.name }}
