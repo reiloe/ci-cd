@@ -83,6 +83,7 @@ jobs:
       - name: Setup SSH key
         run: |
             mkdir -p ~/.ssh
+            touch ~/.ssh/known_hosts
             echo "${{ secrets.DEPLOYMENT_KEY }}" > ~/.ssh/deployment_key
             chmod 600 ~/.ssh/deployment_key
       - name: Ensure server is in known_hosts
