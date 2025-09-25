@@ -73,7 +73,7 @@ jobs:
           echo "🚀 Building $IMAGE:$TAG"
 
           # Build
-          docker build -t $IMAGE:$TAG ./conduit-${{ matrix.service }}
+          docker build --pull --no-cache -t $IMAGE:$TAG ./conduit-${{ matrix.service }}
 
           # Push main tag
           docker push $IMAGE:$TAG
