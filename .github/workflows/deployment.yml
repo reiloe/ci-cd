@@ -184,11 +184,11 @@ jobs:
                   \"
                 "
               volumes:
-                - backend_data:/app
+                - backend-db:/app/db.sqlite3
               pull_policy: always
 
           volumes:
-            backend_data:
+            backend-db:
           EOL
 
           # Create .env file on server
@@ -199,4 +199,3 @@ jobs:
           docker compose pull
           docker compose up -d --force-recreate
           EOF
-          
