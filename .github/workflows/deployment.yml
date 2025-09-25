@@ -94,9 +94,9 @@ jobs:
             chmod 600 ~/.ssh/deployment_key
       - name: Ensure server is in known_hosts
         run: |
-            if ! ssh-keygen -F "${{ secrets.SERVER_IP }}" > /dev/null; then
-                echo "Adding server fingerprint for ${{ secrets.SERVER_IP }}"
-                ssh-keyscan -H "${{ secrets.SERVER_IP }}" >> ~/.ssh/known_hosts
+            if ! ssh-keygen -F "${{ secrets.SERVERIP }}" > /dev/null; then
+                echo "Adding server fingerprint for ${{ secrets.SERVERIP }}"
+                ssh-keyscan -H "${{ secrets.SERVERIP }}" >> ~/.ssh/known_hosts
             else
                 echo "Server already in known_hosts"
             fi
