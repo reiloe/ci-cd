@@ -130,10 +130,10 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/static/'
 
 
-CORS_ORIGIN = os.environ["CORS_ORIGIN"].split(",")
+CORS_ORIGINS = os.environ["CORS_ORIGINS"].split(",")
 CORS_ORIGIN_WHITELIST = ()
 
-hosts = [f"{char}:"+os.environ['FRONTEND_PORT'] for char in CORS_ORIGIN]
+hosts = [f"{char}:"+os.environ['FRONTEND_PORT'] for char in CORS_ORIGINS]
 
 for host in hosts:
     CORS_ORIGIN_WHITELIST += (host,)
