@@ -16,6 +16,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
   build:
@@ -52,6 +53,11 @@ jobs:
             echo "tag=v${RELEASE_NAME}" >> $GITHUB_OUTPUT
           fi
       
+      - name: Check whoami and token
+        run: |
+          echo "Actor: ${{ github.actor }}"
+          echo "Token available? ${{ secrets.GITHUB_TOKEN != '' }}"
+          
       - name: Build and push Docker image
         run: |
           IMAGE=ghcr.io/${{ github.repository }}/${{ matrix.service }}
