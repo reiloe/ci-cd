@@ -68,8 +68,9 @@ jobs:
           echo "Repository: ${{ github.repository }}"
           echo "Image will be: ghcr.io/${{ github.repository }}/${{ matrix.service }}"
     
-      - name: Who am I in docker
-        run: docker whoami
+      - name: Check docker credentials
+        run: |
+          cat ~/.docker/config.json | jq .
       
       - name: Build and push Docker image
         run: |
