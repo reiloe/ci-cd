@@ -25,6 +25,10 @@ jobs:
       matrix:
         service: [frontend, backend]
     
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      extra_tag: ${{ steps.vars.outputs.extra_tag }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -88,31 +92,55 @@ jobs:
     steps:
       - name: Setup SSH key
         run: |
-            mkdir -p ~/.ssh
-            touch ~/.ssh/known_hosts
-            echo "${{ secrets.DEPLOYMENT_KEY }}" > ~/.ssh/deployment_key
-            chmod 600 ~/.ssh/deployment_key
+          mkdir -p ~/.ssh
+          touch ~/.ssh/known_hosts
+          echo "${{ secrets.DEPLOYMENT_KEY }}" > ~/.ssh/deployment_key
+          chmod 600 ~/.ssh/deployment_key
+
       - name: Ensure server is in known_hosts
         run: |
-            if ! ssh-keygen -F "${{ secrets.DEPLOYMENT_HOST }}" > /dev/null; then
-                echo "Adding server fingerprint for ${{ secrets.DEPLOYMENT_HOST }}"
-                ssh-keyscan -H "${{ secrets.DEPLOYMENT_HOST }}" >> ~/.ssh/known_hosts
-            else
-                echo "Server already in known_hosts"
-            fi
+          if ! ssh-keygen -F "${{ secrets.DEPLOYMENT_HOST }}" > /dev/null; then
+              echo "Adding server fingerprint for ${{ secrets.DEPLOYMENT_HOST }}"
+              ssh-keyscan -H "${{ secrets.DEPLOYMENT_HOST }}" >> ~/.ssh/known_hosts
+          else
+              echo "Server already in known_hosts"
+          fi
+      - name: Create temporary env file
+        run: |
+          cat > .env.deploy <<EOL
+          TAG=${{ needs.build.outputs.tag }}
+          GITHUB_REPOSITORY=${{ github.repository }}
+          FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
+          BACKEND_PORT=${{ secrets.BACKEND_PORT }}
+          DJANGO_SU_NAME=${{ secrets.DJANGO_SU_NAME }}
+          DJANGO_SU_EMAIL=${{ secrets.DJANGO_SU_EMAIL }}
+          DJANGO_SU_PASSWORD=${{ secrets.DJANGO_SU_PASSWORD }}
+          ALLOWED_HOSTS=${{ secrets.SERVERIP }}
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          DEBUG=${{ secrets.DEBUG }}
+          SERVERIP=${{ secrets.SERVERIP }}
+          CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
+          EOL
+
+      - name: Copy env file to server
+        run: |
+          scp -i ~/.ssh/deployment_key .env.deploy \
+          ${{ secrets.DEPLOYMENT_USER }}@${{ secrets.DEPLOYMENT_HOST }}:/tmp/.env.deploy
       - name: Deploy to server via SSH
         run: |
-          ssh -i ~/.ssh/deployment_key ${{ secrets.DEPLOYMENT_USER }}@${{ secrets.DEPLOYMENT_HOST }} << 'EOF'
+          ssh -i ~/.ssh/deployment_key ${{ secrets.DEPLOYMENT_USER }}@${{ secrets.DEPLOYMENT_HOST }} bash -s <<'EOF'
           set -e
 
-          PROJECT_DIR=~/deployments/${{ github.event.repository.name }}
+          export $(grep -v '^#' /tmp/.env.deploy | xargs)
+
+          PROJECT_DIR=~/deployments/${GITHUB_REPOSITORY}
           mkdir -p $PROJECT_DIR
 
           # Create docker-compose.yml on server
           cat > $PROJECT_DIR/docker-compose.yml <<EOL
           services:
             frontend:
-              image: ghcr.io/${{ github.repository }}/frontend:${{ needs.build.outputs.tag }}
+              image: ghcr.io/${GITHUB_REPOSITORY}/frontend:${TAG}
               restart: on-failure
               env_file: .env
               ports:
@@ -122,7 +150,7 @@ jobs:
               pull_policy: always
 
             backend:
-              image: ghcr.io/${{ github.repository }}/backend:${{ needs.build.outputs.tag }}
+              image: ghcr.io/${GITHUB_REPOSITORY}/backend:${TAG}
               restart: on-failure
               env_file: .env
               ports:
@@ -134,7 +162,7 @@ jobs:
               pull_policy: always
 
             backend-init:
-              image: ghcr.io/${{ github.repository }}/backend:${{ needs.build.outputs.tag }}
+              image: ghcr.io/${GITHUB_REPOSITORY}/backend:${TAG}
               restart: "no"
               env_file: .env
               command: >
@@ -161,18 +189,7 @@ jobs:
           EOL
 
           # Create .env file on server
-          cat > $PROJECT_DIR/.env <<EOL
-          FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
-          BACKEND_PORT=${{ secrets.BACKEND_PORT }}
-          DJANGO_SU_NAME=${{ secrets.DJANGO_SU_NAME }}
-          DJANGO_SU_EMAIL=${{ secrets.DJANGO_SU_EMAIL }}
-          DJANGO_SU_PASSWORD=${{ secrets.DJANGO_SU_PASSWORD }}
-          ALLOWED_HOSTS=${{ secrets.SERVER_IP }}
-          SECRET_KEY=${{ secrets.SECRET_KEY }}
-          DEBUG=${{ secrets.DEBUG }}
-          SERVERIP=${{ secrets.SERVER_IP }}
-          CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
-          EOL
+          cp /tmp/.env.deploy $PROJECT_DIR/.env
 
           # Deploy containers (immer pullen!)
           cd $PROJECT_DIR
