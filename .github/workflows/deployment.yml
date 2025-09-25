@@ -102,7 +102,7 @@ jobs:
             fi
       - name: Deploy to server via SSH
         run: |
-          ssh -i ~/.ssh/deployment_key ${{ secrets.DEPLOYMENT_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          ssh -i ~/.ssh/deployment_key ${{ secrets.DEPLOYMENT_USER }}@${{ secrets.SERVERIP }} << 'EOF'
           set -e
 
           PROJECT_DIR=~/deployments/${{ github.event.repository.name }}
