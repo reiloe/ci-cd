@@ -36,7 +36,7 @@ services:
 
     restart: on-failure    
     volumes:
-      - backend-db:/app/db.sqlite3
+      - backend-db:/app/db
     depends_on:
       - backend-init
 
@@ -52,6 +52,6 @@ services:
       python manage.py shell < init_superuser.py
       "
     volumes:
-      - backend-db:/app/db.sqlite3
+      - backend-db:/app/db
 volumes:
   backend-db:
