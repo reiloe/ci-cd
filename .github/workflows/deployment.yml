@@ -159,7 +159,7 @@ jobs:
               ports:
                 - "\${BACKEND_PORT}:\${BACKEND_PORT}"
               volumes:
-                - backend_data:/app
+                - backend-db:/app/db.sqlite3
               depends_on:
                 - backend-init
               pull_policy: always

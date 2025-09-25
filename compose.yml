@@ -52,6 +52,6 @@ services:
       python manage.py shell < init_superuser.py
       "
     volumes:
-      - backend:/app
+      - backend-db:/app/db.sqlite3
 volumes:
   backend-db:
