@@ -7,10 +7,15 @@ on:
       - develop
       - 'feature/**'
       - 'release/**'
+  
   pull_request:
     branches:
       - main
       - develop
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build:
