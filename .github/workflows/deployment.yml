@@ -1,0 +1,161 @@
+name: Deployment Final
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'release/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [frontend, backend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ env.ACT && secrets.GHCR_USER || github.actor }}
+          password: ${{ env.ACT && secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Set image tag
+        id: vars
+        run: |
+          if [[ "${GITHUB_REF}" == refs/heads/main ]]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+            echo "extra_tag=$(date +'%Y-%m-%d-%H-%M')" >> $GITHUB_OUTPUT
+          elif [[ "${GITHUB_REF}" == refs/heads/develop ]]; then
+            echo "tag=develop-latest" >> $GITHUB_OUTPUT
+            echo "extra_tag=develop-$(date +'%Y-%m-%d-%H-%M')" >> $GITHUB_OUTPUT
+          elif [[ "${GITHUB_REF}" == refs/heads/feature/* ]]; then
+            FEATURE_NAME=$(echo ${GITHUB_REF#refs/heads/feature/} | tr '/' '-')
+            echo "tag=${FEATURE_NAME}-$(date +'%Y-%m-%d-%H-%M')" >> $GITHUB_OUTPUT
+          elif [[ "${GITHUB_REF}" == refs/heads/release/* ]]; then
+            RELEASE_NAME=${GITHUB_REF#refs/heads/release/}
+            echo "tag=v${RELEASE_NAME}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_NAME=ghcr.io/${{ github.repository }}/${{ matrix.service }}
+          TAG=${{ steps.vars.outputs.tag }}
+          EXTRA_TAG=${{ steps.vars.outputs.extra_tag }}
+
+          echo "Building $IMAGE_NAME with tag $TAG"
+
+          docker build -t $IMAGE_NAME:$TAG ./conduit-${{ matrix.service }}
+          docker push $IMAGE_NAME:$TAG
+
+          if [ -n "$EXTRA_TAG" ]; then
+            echo "Also tagging as $EXTRA_TAG"
+            docker tag $IMAGE_NAME:$TAG $IMAGE_NAME:$EXTRA_TAG
+            docker push $IMAGE_NAME:$EXTRA_TAG
+          fi
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/feature/') || startsWith(github.ref, 'refs/heads/release/')
+    steps:
+      - name: Setup SSH key
+        run: |
+            mkdir -p ~/.ssh
+            echo "${{ secrets.DEPLOYMENT_KEY }}" > ~/.ssh/deployment_key
+            chmod 600 ~/.ssh/deployment_key
+      - name: Ensure server is in known_hosts
+        run: |
+            if ! ssh-keygen -F "${{ secrets.SERVER_IP }}" > /dev/null; then
+                echo "Adding server fingerprint for ${{ secrets.SERVER_IP }}"
+                ssh-keyscan -H "${{ secrets.SERVER_IP }}" >> ~/.ssh/known_hosts
+            else
+                echo "Server already in known_hosts"
+            fi
+      - name: Deploy to server via SSH
+        run: |
+          ssh -i ~/.ssh/deployment_key ${{ secrets.DEPLOYMENT_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          set -e
+
+          PROJECT_DIR=~/deployments/${{ github.event.repository.name }}
+          mkdir -p $PROJECT_DIR
+
+          # Create docker-compose.yml on server
+          cat > $PROJECT_DIR/docker-compose.yml <<EOL
+          services:
+            frontend:
+              image: ghcr.io/${{ github.repository }}/frontend:${{ steps.vars.outputs.tag }}
+              restart: on-failure
+              env_file: .env
+              ports:
+                - "\${FRONTEND_PORT}:80"
+              depends_on:
+                - backend
+
+            backend:
+              image: ghcr.io/${{ github.repository }}/backend:${{ steps.vars.outputs.tag }}
+              restart: on-failure
+              env_file: .env
+              ports:
+                - "\${BACKEND_PORT}:\${BACKEND_PORT}"
+              volumes:
+                - backend_data:/app
+              depends_on:
+                - backend-init
+
+            backend-init:
+              image: ghcr.io/${{ github.repository }}/backend:${{ steps.vars.outputs.tag }}
+              restart: "no"
+              env_file: .env
+              command: >
+                sh -c "
+                  python manage.py migrate --noinput &&
+                  python manage.py shell -c \"
+                  from django.contrib.auth import get_user_model
+                  import os
+                  User = get_user_model()
+                  if not User.objects.filter(username=os.environ['DJANGO_SU_NAME']).exists():
+                    User.objects.create_superuser(
+                      os.environ['DJANGO_SU_NAME'],
+                      os.environ['DJANGO_SU_EMAIL'],
+                      os.environ['DJANGO_SU_PASSWORD']
+                    )
+                  \"
+                "
+              volumes:
+                - backend_data:/app
+
+          volumes:
+            backend_data:
+          EOL
+
+          # Create .env file on server
+          cat > $PROJECT_DIR/.env <<EOL
+          FRONTEND_PORT=${{ secrets.FRONTEND_PORT }}
+          BACKEND_PORT=${{ secrets.BACKEND_PORT }}
+          DJANGO_SU_NAME=${{ secrets.DJANGO_SU_NAME }}
+          DJANGO_SU_EMAIL=${{ secrets.DJANGO_SU_EMAIL }}
+          DJANGO_SU_PASSWORD=${{ secrets.DJANGO_SU_PASSWORD }}
+          ALLOWED_HOSTS=${{ secrets.SERVER_IP }}
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          DEBUG=${{ secrets.DEBUG }}
+          SERVERIP=${{ secrets.SERVER_IP }}
+          CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
+          EOL
+
+
+
+          # Deploy containers
+          cd $PROJECT_DIR
+          docker compose pull
+          docker compose up -d
+          EOF

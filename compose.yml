@@ -1,0 +1,57 @@
+---
+services:
+
+  frontend:
+    build:
+      context: ./conduit-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT}:80"    
+    env_file: ".env"
+    environment:
+      - SERVERIP=${SERVERIP}
+      - BACKEND_PORT=${BACKEND_PORT}
+      - FRONTEND_PORT=${FRONTEND_PORT}
+    restart: on-failure
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./conduit-backend
+      dockerfile: Dockerfile    
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    env_file: ".env"
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=${DEBUG}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - DJANGO_SU_NAME=${DJANGO_SU_NAME}
+      - DJANGO_SU_EMAIL=${DJANGO_SU_EMAIL}
+      - DJANGO_SU_PASSWORD=${DJANGO_SU_PASSWORD}
+      - SERVERIP=${SERVERIP}
+      - BACKEND_PORT=${BACKEND_PORT}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+
+    restart: on-failure    
+    volumes:
+      - backend:/app
+    depends_on:
+      - backend-init
+
+  backend-init:
+    build:
+      context: ./conduit-backend
+      dockerfile: Dockerfile
+    env_file: ".env"
+    restart: "no"
+    command: >
+      sh -c "
+      python manage.py migrate --noinput &&
+      python manage.py shell < init_superuser.py
+      "
+    volumes:
+      - backend:/app
+volumes:
+  backend:
