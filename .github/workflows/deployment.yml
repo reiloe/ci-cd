@@ -31,8 +31,8 @@ jobs:
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
-          username: ${{ env.ACT && secrets.GHCR_USER || github.actor }}
-          password: ${{ env.ACT && secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set image tag
         id: vars
