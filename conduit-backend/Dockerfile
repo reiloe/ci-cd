@@ -9,4 +9,4 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 COPY . .
 
-CMD ["sh", "-c", "gunicorn conduit.wsgi:application --bind 0.0.0.0:${BACKEND_PORT}"]
+CMD ["sh", "-c", "gunicorn conduit.wsgi:application --bind 0:${BACKEND_PORT} --workers=3 --timeout=120 --worker-class=gthread --log-level debug"]
